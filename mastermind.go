@@ -36,6 +36,7 @@ const (
 type stats struct {
 	timeTotal      time.Duration
 	fastestTime    time.Duration
+	longestTime    time.Duration
 	played         int
 	guesses        int
 	firstGuessWins int
@@ -78,19 +79,23 @@ func getPassword(sz int) []int {
 }
 
 func getUserGuess(s *bufio.Scanner, guess *Guess, sz int) {
+	errorMSG := "Please enter %d numbers separated by spaces. E.G.: 1 2 3 4 5\n"
 	for {
 		fmt.Print("Please enter your guess:> ")
 		s.Scan()
 		values := strings.Split(s.Text(), " ")
 		if len(values) != sz {
-			fmt.Printf("Please enter %d numbers 1-9 separated by spaces. E.G.: 1 2 3 4 5\n", sz)
+			fmt.Printf(errorMSG, sz)
 			continue
 		}
 
 		redo := false
 		for i := 0; i < sz; i++ {
 			if val, err := strconv.Atoi(values[i]); err != nil {
-				fmt.Printf("Isn't good: (%v)", val)
+				fmt.Printf(errorMSG, sz)
+				if val == 0 {
+					fmt.Printf("Not a number (%v) - Try again\n", val)
+				}
 				redo = true
 				break
 			} else {
@@ -140,7 +145,10 @@ func updateStats(gs gamestat, as stats) stats {
 	if as.fastestTime == 0 || gs.time < as.fastestTime {
 		as.fastestTime = gs.time
 	}
-	if gs.firstGuessWin == 1 {
+	if as.longestTime == 0 || gs.time > as.longestTime {
+		as.longestTime = gs.time
+	}
+	if gs.guesses == 1 {
 		as.firstGuessWins++
 	}
 	as.guesses += gs.guesses
@@ -150,9 +158,9 @@ func updateStats(gs gamestat, as stats) stats {
 }
 
 func printStats(s stats) {
-	fmt.Printf("Total time played: %s Fastest win: %s\n", s.timeTotal, s.fastestTime)
-	fmt.Printf("Games played: %d Total guesses: %d\n", s.played, s.guesses)
-	fmt.Printf("Average guesses: %.2f First guess wins: %d\n", float64(s.guesses)/float64(s.played), s.firstGuessWins)
+	fmt.Printf("Time:\n\t\tTotal time played: %s\n\t\tFastest win: %s\n\t\tLongest time: %s\n", s.timeTotal, s.fastestTime, s.longestTime)
+	fmt.Printf("Game stats:\n\t\tGames played: %d\n", s.played)
+	fmt.Printf("Guessing:\n\t\tAverage guesses: %.2f\n\t\tFirst guess wins: %d\n\t\tTotal guesses: %d\n", float64(s.guesses)/float64(s.played), s.firstGuessWins, s.guesses)
 }
 
 func main() {
@@ -178,13 +186,9 @@ func main() {
 
 		// check win
 		if checkWin(guess, size) {
-			fmt.Println("You did it!")
 			gs.time = time.Since(start)
-			fmt.Println(len(guesses))
 			gs.guesses = len(guesses)
-			if len(guesses) == 1 {
-				gs.firstGuessWin = 1
-			}
+			fmt.Printf("You did it!\n\t\tGuesses: %d\n\t\tTime: %s\n\n", gs.guesses, gs.time)
 			allstats = updateStats(gs, allstats)
 			printStats(allstats)
 			fmt.Printf("Play again? (y/N):> ")
