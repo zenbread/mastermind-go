@@ -5,9 +5,9 @@
 ### Stats
 
 - [x] Quickest time to solve
-- [] longest time to solve
+- [x] longest time to solve
 - [] Quit before done
-- [] longest streak
+- [x] longest streak
 - [x] guess to solve
 
 ### Gameplay
@@ -17,7 +17,8 @@
 
 ### Menu
 
-- [] Ask about gameplay
+- [x] Ask about gameplay
+- [] user login
 
 ### IN/OUT
 
