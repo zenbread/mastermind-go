@@ -36,14 +36,18 @@ const (
 type stats struct {
 	timeTotal      time.Duration
 	fastestTime    time.Duration
+	longestTime    time.Duration
+	streak         int
 	played         int
+	quit           int
 	guesses        int
 	firstGuessWins int
 }
 
 type gamestat struct {
-	guesses       int
 	time          time.Duration
+	quit          int
+	guesses       int
 	firstGuessWin int
 }
 
@@ -55,7 +59,7 @@ func assignColors(guess *Guess, password []int, sz int) {
 			marked[i] = true
 		}
 	}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < sz; i++ {
 		for ind, x := range password {
 			if !marked[ind] && guess.Color[i] != Right && guess.Num[i] == x {
 				marked[ind] = true
@@ -66,31 +70,35 @@ func assignColors(guess *Guess, password []int, sz int) {
 	}
 }
 
-func getPassword(sz int) []int {
+func getPassword(o Options) []int {
 	rand.Seed(time.Now().UnixNano())
-	password := make([]int, sz)
+	password := make([]int, o.size)
 
-	for i := 0; i < sz; i++ {
-		password[i] = rand.Intn(9) + 1
+	for i := 0; i < o.size; i++ {
+		password[i] = rand.Intn(o.max-o.min) + o.min
 	}
 
 	return password
 }
 
 func getUserGuess(s *bufio.Scanner, guess *Guess, sz int) {
+	errorMSG := "Please enter %d numbers separated by spaces. E.G.: 0 1 2 3 4<enter>\n"
 	for {
 		fmt.Print("Please enter your guess:> ")
 		s.Scan()
 		values := strings.Split(s.Text(), " ")
 		if len(values) != sz {
-			fmt.Printf("Please enter %d numbers 1-9 separated by spaces. E.G.: 1 2 3 4 5\n", sz)
+			fmt.Printf(errorMSG, sz)
 			continue
 		}
 
 		redo := false
 		for i := 0; i < sz; i++ {
 			if val, err := strconv.Atoi(values[i]); err != nil {
-				fmt.Printf("Isn't good: (%v)", val)
+				fmt.Printf(errorMSG, sz)
+				if val == 0 {
+					fmt.Printf("Not a number (%v) - Try again\n", val)
+				}
 				redo = true
 				break
 			} else {
@@ -112,24 +120,26 @@ func checkWin(guess *Guess, sz int) bool {
 	return true
 }
 
-func printHistory(guesses []*Guess, sz int) {
+func printHistory(o Options, guesses []*Guess) {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%%%ds ", o.digits)
 	for _, guess := range guesses {
-		for i := 0; i < sz; i++ {
+		for i := 0; i < o.size; i++ {
 			switch guess.Color[i] {
 			case Right:
-				fmt.Print("✅ ")
+				fmt.Printf(sb.String(), "✅")
 			case White:
-				fmt.Print("➖ ")
+				fmt.Printf(sb.String(), "➖")
 			case Wrong:
-				fmt.Print("⭕ ")
+				fmt.Printf(sb.String(), "⭕")
 			}
 		}
 		fmt.Println("")
 		// add the colors to each numbers
 
 		// get rid of the wrong ones
-		for i := 0; i < sz; i++ {
-			fmt.Printf("%-3d", guess.Num[i])
+		for i := 0; i < o.size; i++ {
+			fmt.Printf(fmt.Sprintf("%%%dd", -o.spaces), guess.Num[i])
 		}
 		fmt.Println("\n------------")
 	}
@@ -140,8 +150,17 @@ func updateStats(gs gamestat, as stats) stats {
 	if as.fastestTime == 0 || gs.time < as.fastestTime {
 		as.fastestTime = gs.time
 	}
-	if gs.firstGuessWin == 1 {
+	if as.longestTime == 0 || gs.time > as.longestTime {
+		as.longestTime = gs.time
+	}
+	if gs.guesses == 1 {
 		as.firstGuessWins++
+	}
+	if gs.quit == 1 {
+		as.quit++
+		as.streak = 0
+	} else {
+		as.streak++
 	}
 	as.guesses += gs.guesses
 	as.played++
@@ -150,55 +169,88 @@ func updateStats(gs gamestat, as stats) stats {
 }
 
 func printStats(s stats) {
-	fmt.Printf("Total time played: %s Fastest win: %s\n", s.timeTotal, s.fastestTime)
-	fmt.Printf("Games played: %d Total guesses: %d\n", s.played, s.guesses)
-	fmt.Printf("Average guesses: %.2f First guess wins: %d\n", float64(s.guesses)/float64(s.played), s.firstGuessWins)
+	fmt.Printf("Time:\n\t\tTotal time played: %s\n\t\tFastest win: %s\n\t\tLongest time: %s\n", s.timeTotal, s.fastestTime, s.longestTime)
+	fmt.Printf("Game stats:\n\t\tGames played: %d\n\t\tTimes Quit: %d\n\t\tLongest Streak: %d\n", s.played, s.quit, s.streak)
+	fmt.Printf("Guessing:\n\t\tAverage guesses: %.2f\n\t\tFirst guess wins: %d\n\t\tTotal guesses: %d\n", float64(s.guesses)/float64(s.played), s.firstGuessWins, s.guesses)
+}
+
+// True is yes, False is no
+func userYN(s *bufio.Scanner) bool {
+	fmt.Print("Enter y/N:> ")
+	s.Scan()
+	output := s.Text()
+	if strings.ToLower(output) == "y" {
+		return true
+	}
+	return false
+}
+
+type Options struct {
+	digits int
+	spaces int
+	min    int
+	max    int
+	size   int
+}
+
+func gameplayOptions(s *bufio.Scanner) Options {
+	options := Options{
+		digits: 1,
+		spaces: 3,
+		min:    0,
+		max:    9,
+		size:   5,
+	}
+	fmt.Print("Double Digits (Up to 25)? ")
+	if userYN(s) {
+		options.digits = -2
+		options.spaces = 4
+		options.max = 25
+	}
+	fmt.Print("Four numbers? ")
+	if userYN(s) {
+		options.size = 4
+	}
+	return options
 }
 
 func main() {
-	size := 5
-	password := getPassword(size)
-	// get input
-	fmt.Println(password)
-
 	// game setup stats and variables
 	s := bufio.NewScanner(os.Stdin)
+	options := gameplayOptions(s)
+	password := getPassword(options)
+	fmt.Println(password)
 	allstats := stats{}
 	gs := gamestat{}
 	start := time.Now()
 	guesses := make([]*Guess, 0)
 	for {
-		guess := NewGuess(size)
-		getUserGuess(s, guess, size)
+		guess := NewGuess(options.size)
+		getUserGuess(s, guess, options.size)
 
 		// check if numbers match
-		assignColors(guess, password, size)
+		assignColors(guess, password, options.size)
 		guesses = append(guesses, guess)
-		printHistory(guesses, size)
+		printHistory(options, guesses)
 
 		// check win
-		if checkWin(guess, size) {
-			fmt.Println("You did it!")
+		if checkWin(guess, options.size) {
 			gs.time = time.Since(start)
-			fmt.Println(len(guesses))
 			gs.guesses = len(guesses)
-			if len(guesses) == 1 {
-				gs.firstGuessWin = 1
-			}
+			gs.quit = 0
+			fmt.Printf("You did it!\n\t\tGuesses: %d\n\t\tTime: %s\n\n", gs.guesses, gs.time)
 			allstats = updateStats(gs, allstats)
 			printStats(allstats)
-			fmt.Printf("Play again? (y/N):> ")
-			s.Scan()
-			if strings.ToLower(s.Text()) != "y" {
+			fmt.Print("Play again? ")
+			if !userYN(s) {
 				break
 			}
 			// reset game variables
 			gs = gamestat{}
 			start = time.Now()
 			guesses = make([]*Guess, 0)
-			password = getPassword(size)
+			password = getPassword(options)
 			fmt.Println(password)
-
 		}
 	}
 }
