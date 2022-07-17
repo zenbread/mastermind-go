@@ -5,79 +5,200 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
-type answer struct {
-	num   int
-	right bool
-	in    bool
+type Guess struct {
+	Num   []int
+	Color []Color
 }
 
-func main() {
-	rand.Seed(time.Now().UnixNano())
-	passSize := 5
-
-	password := make([]int, passSize, passSize)
-
-	for i := 0; i < passSize; i++ {
-		password[i] = rand.Intn(9) + 1
+func NewGuess(sz int) *Guess {
+	nums := make([]int, sz)
+	col := make([]Color, sz)
+	for i := 0; i < sz; i++ {
+		col[i] = Wrong
 	}
+	guess := Guess{nums, col}
+	return &guess
+}
 
-	// get input
-	fmt.Println(password)
+type Color int
 
-	s := bufio.NewScanner(os.Stdin)
-	for {
-		fmt.Print("Please enter your guess:> ")
-		s.Scan()
-		input := s.Text()
-		var nums [5]answer
-		if n, err := fmt.Sscanf(input, "%d %d %d %d %d", &nums[0].num, &nums[1].num, &nums[2].num, &nums[3].num, &nums[4].num); err != nil || n != 5 {
-			fmt.Println("Please enter 5 numbers 1-9 separated by spaces. E.G.: 1 2 3 4 5")
-			continue
+const (
+	Wrong Color = iota
+	White
+	Right
+)
+
+type stats struct {
+	timeTotal      time.Duration
+	fastestTime    time.Duration
+	played         int
+	guesses        int
+	firstGuessWins int
+}
+
+type gamestat struct {
+	guesses       int
+	time          time.Duration
+	firstGuessWin int
+}
+
+func assignColors(guess *Guess, password []int, sz int) {
+	marked := make([]bool, sz)
+	for i := 0; i < sz; i++ {
+		if guess.Num[i] == password[i] {
+			guess.Color[i] = Right
+			marked[i] = true
 		}
-
-		// check if numbers match
-		var marked [5]bool
-		for i := 0; i < 5; i++ {
-			if nums[i].num == password[i] {
-				nums[i].right = true
-			} else {
-				for ind, x := range password {
-					if nums[i].num == x && !marked[ind] {
-						marked[ind] = true
-						nums[i].in = true
-						break
-					}
-				}
-			}
-
-		}
-		check := true
-		for i := 0; i < 5; i++ {
-			if !nums[i].right {
-				check = false
+	}
+	for i := 0; i < 5; i++ {
+		for ind, x := range password {
+			if !marked[ind] && guess.Color[i] != Right && guess.Num[i] == x {
+				marked[ind] = true
+				guess.Color[i] = White
 				break
 			}
 		}
-		if check {
-			fmt.Println("You got it!")
+	}
+}
+
+func getPassword(sz int) []int {
+	rand.Seed(time.Now().UnixNano())
+	password := make([]int, sz)
+
+	for i := 0; i < sz; i++ {
+		password[i] = rand.Intn(9) + 1
+	}
+
+	return password
+}
+
+func getUserGuess(s *bufio.Scanner, guess *Guess, sz int) {
+	for {
+		fmt.Print("Please enter your guess:> ")
+		s.Scan()
+		values := strings.Split(s.Text(), " ")
+		if len(values) != sz {
+			fmt.Printf("Please enter %d numbers 1-9 separated by spaces. E.G.: 1 2 3 4 5\n", sz)
+			continue
+		}
+
+		redo := false
+		for i := 0; i < sz; i++ {
+			if val, err := strconv.Atoi(values[i]); err != nil {
+				fmt.Printf("Isn't good: (%v)", val)
+				redo = true
+				break
+			} else {
+				guess.Num[i] = val
+			}
+		}
+		if !redo {
 			break
 		}
-		for i := 0; i < 5; i++ {
-			if nums[i].right {
-				fmt.Print("Right ")
-			} else if nums[i].in {
-				fmt.Print("White ")
-			} else {
-				fmt.Print("Wrong ")
+	}
+}
+
+func checkWin(guess *Guess, sz int) bool {
+	for i := 0; i < sz; i++ {
+		if guess.Color[i] != Right {
+			return false
+		}
+	}
+	return true
+}
+
+func printHistory(guesses []*Guess, sz int) {
+	for _, guess := range guesses {
+		for i := 0; i < sz; i++ {
+			switch guess.Color[i] {
+			case Right:
+				fmt.Print("✅ ")
+			case White:
+				fmt.Print("➖ ")
+			case Wrong:
+				fmt.Print("⭕ ")
 			}
 		}
 		fmt.Println("")
 		// add the colors to each numbers
 
 		// get rid of the wrong ones
-		fmt.Println(input)
+		for i := 0; i < sz; i++ {
+			fmt.Printf("%-3d", guess.Num[i])
+		}
+		fmt.Println("\n------------")
+	}
+}
+
+func updateStats(gs gamestat, as stats) stats {
+
+	if as.fastestTime == 0 || gs.time < as.fastestTime {
+		as.fastestTime = gs.time
+	}
+	if gs.firstGuessWin == 1 {
+		as.firstGuessWins++
+	}
+	as.guesses += gs.guesses
+	as.played++
+	as.timeTotal += gs.time
+	return as
+}
+
+func printStats(s stats) {
+	fmt.Printf("Total time played: %s Fastest win: %s\n", s.timeTotal, s.fastestTime)
+	fmt.Printf("Games played: %d Total guesses: %d\n", s.played, s.guesses)
+	fmt.Printf("Average guesses: %.2f First guess wins: %d\n", float64(s.guesses)/float64(s.played), s.firstGuessWins)
+}
+
+func main() {
+	size := 5
+	password := getPassword(size)
+	// get input
+	fmt.Println(password)
+
+	// game setup stats and variables
+	s := bufio.NewScanner(os.Stdin)
+	allstats := stats{}
+	gs := gamestat{}
+	start := time.Now()
+	guesses := make([]*Guess, 0)
+	for {
+		guess := NewGuess(size)
+		getUserGuess(s, guess, size)
+
+		// check if numbers match
+		assignColors(guess, password, size)
+		guesses = append(guesses, guess)
+		printHistory(guesses, size)
+
+		// check win
+		if checkWin(guess, size) {
+			fmt.Println("You did it!")
+			gs.time = time.Since(start)
+			fmt.Println(len(guesses))
+			gs.guesses = len(guesses)
+			if len(guesses) == 1 {
+				gs.firstGuessWin = 1
+			}
+			allstats = updateStats(gs, allstats)
+			printStats(allstats)
+			fmt.Printf("Play again? (y/N):> ")
+			s.Scan()
+			if strings.ToLower(s.Text()) != "y" {
+				break
+			}
+			// reset game variables
+			gs = gamestat{}
+			start = time.Now()
+			guesses = make([]*Guess, 0)
+			password = getPassword(size)
+			fmt.Println(password)
+
+		}
 	}
 }
