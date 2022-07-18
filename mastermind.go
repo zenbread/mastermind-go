@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"encoding/gob"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -33,15 +36,15 @@ const (
 	Right
 )
 
-type stats struct {
-	timeTotal      time.Duration
-	fastestTime    time.Duration
-	longestTime    time.Duration
-	streak         int
-	played         int
-	quit           int
-	guesses        int
-	firstGuessWins int
+type Stats struct {
+	TimeTotal      time.Duration
+	FastestTime    time.Duration
+	LongestTime    time.Duration
+	Streak         int
+	Played         int
+	Quit           int
+	Guesses        int
+	FirstGuessWins int
 }
 
 type gamestat struct {
@@ -149,33 +152,45 @@ func printHistory(o Options, guesses []*Guess) {
 	}
 }
 
-func updateStats(gs gamestat, as stats) stats {
+func updateStats(gs gamestat, as Stats) Stats {
 
-	if as.fastestTime == 0 || gs.time < as.fastestTime {
-		as.fastestTime = gs.time
+	if as.FastestTime == 0 || gs.time < as.FastestTime {
+		as.FastestTime = gs.time
 	}
-	if as.longestTime == 0 || gs.time > as.longestTime {
-		as.longestTime = gs.time
+	if as.LongestTime == 0 || gs.time > as.LongestTime {
+		as.LongestTime = gs.time
 	}
 	if gs.guesses == 1 {
-		as.firstGuessWins++
+		as.FirstGuessWins++
 	}
 	if gs.quit == 1 {
-		as.quit++
-		as.streak = 0
+		as.Quit++
+		as.Streak = 0
 	} else {
-		as.streak++
+		as.Streak++
 	}
-	as.guesses += gs.guesses
-	as.played++
-	as.timeTotal += gs.time
+	as.Guesses += gs.guesses
+	as.Played++
+	as.TimeTotal += gs.time
 	return as
 }
 
-func printStats(s stats) {
-	fmt.Printf("Time:\n\t\tTotal time played: %s\n\t\tFastest win: %s\n\t\tLongest time: %s\n", s.timeTotal, s.fastestTime, s.longestTime)
-	fmt.Printf("Game stats:\n\t\tGames played: %d\n\t\tTimes Quit: %d\n\t\tLongest Streak: %d\n", s.played, s.quit, s.streak)
-	fmt.Printf("Guessing:\n\t\tAverage guesses: %.2f\n\t\tFirst guess wins: %d\n\t\tTotal guesses: %d\n", float64(s.guesses)/float64(s.played), s.firstGuessWins, s.guesses)
+func printStats(s Stats) {
+	fmt.Printf("Time:\n\t\tTotal time played: %s\n\t\tFastest win: %s\n\t\tLongest time: %s\n",
+		s.TimeTotal,
+		s.FastestTime,
+		s.LongestTime,
+	)
+	fmt.Printf("Game stats:\n\t\tGames played: %d\n\t\tTimes Quit: %d\n\t\tLongest Streak: %d\n",
+		s.Played,
+		s.Quit,
+		s.Streak,
+	)
+	fmt.Printf("Guessing:\n\t\tAverage guesses: %.2f\n\t\tFirst guess wins: %d\n\t\tTotal guesses: %d\n",
+		float64(s.Guesses)/float64(s.Played),
+		s.FirstGuessWins,
+		s.Guesses,
+	)
 }
 
 // True is yes, False is no
@@ -202,6 +217,7 @@ func gameplayOptions(s *bufio.Scanner) Options {
 		max:    9,
 		size:   5,
 	}
+
 	fmt.Print("Double Digits (Up to 25)? ")
 	if userYN(s) {
 		options.digits = -2
@@ -215,13 +231,36 @@ func gameplayOptions(s *bufio.Scanner) Options {
 	return options
 }
 
+func writeData(f *os.File, s Stats) error {
+	enc := gob.NewEncoder(f)
+	f.Truncate(0)
+	f.Seek(0, 0)
+	return enc.Encode(s)
+}
+
 func main() {
 	// game setup stats and variables
+	dirname, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal("Unable to access file system.")
+	}
+	fmt.Println(dirname)
+	path := filepath.Join(dirname, "mastermind.bin")
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0755)
+	if err != nil {
+		fmt.Print(err)
+		log.Fatal("Unable to access file system.")
+	}
+	defer file.Close()
+	dec := gob.NewDecoder(file)
+	var allstats Stats
+	if err = dec.Decode(&allstats); err != nil {
+		allstats = Stats{}
+	}
 	s := bufio.NewScanner(os.Stdin)
 	options := gameplayOptions(s)
 	password := getPassword(options)
 	fmt.Println(password)
-	allstats := stats{}
 	gs := gamestat{}
 	start := time.Now()
 	guesses := make([]*Guess, 0)
@@ -236,6 +275,7 @@ func main() {
 			gs.quit = 1
 			allstats = updateStats(gs, allstats)
 			printStats(allstats)
+			writeData(file, allstats)
 			fmt.Println("Thanks for playing.")
 			break
 		}
@@ -254,6 +294,7 @@ func main() {
 			printStats(allstats)
 			fmt.Print("Play again? ")
 			if !userYN(s) {
+				writeData(file, allstats)
 				break
 			}
 			// reset game variables
