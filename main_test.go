@@ -56,12 +56,11 @@ func TestColors(t *testing.T) {
 	}
 
 	// Loop through test cases and check weird values with colors
+	sz := 5
 	for tn, x := range testcases {
-		guess := NewGuess(5)
-		for ind, num := range x.tc {
-			guess.Num[ind] = num
-		}
-		assignColors(guess, x.pass)
+		guess := NewGuess(sz)
+		copy(guess.Num, x.tc)
+		assignColors(guess, x.pass, sz)
 		if !reflect.DeepEqual(guess.Color, x.want) {
 			t.Errorf("Test: %d - Wanted: %v - Got: %v", tn, x.want, guess.Color)
 		}

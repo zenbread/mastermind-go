@@ -45,10 +45,9 @@ type stats struct {
 }
 
 type gamestat struct {
-	time          time.Duration
-	quit          int
-	guesses       int
-	firstGuessWin int
+	time    time.Duration
+	quit    int
+	guesses int
 }
 
 func assignColors(guess *Guess, password []int, sz int) {
@@ -86,6 +85,11 @@ func getUserGuess(s *bufio.Scanner, guess *Guess, sz int) {
 	for {
 		fmt.Print("Please enter your guess:> ")
 		s.Scan()
+		userText := strings.ToLower(s.Text())
+		if userText == "quit" || userText == "q" {
+			guess.Num[0] = -1
+			break
+		}
 		values := strings.Split(s.Text(), " ")
 		if len(values) != sz {
 			fmt.Printf(errorMSG, sz)
@@ -179,10 +183,7 @@ func userYN(s *bufio.Scanner) bool {
 	fmt.Print("Enter y/N:> ")
 	s.Scan()
 	output := s.Text()
-	if strings.ToLower(output) == "y" {
-		return true
-	}
-	return false
+	return strings.ToLower(output) == "y"
 }
 
 type Options struct {
@@ -228,6 +229,16 @@ func main() {
 		guess := NewGuess(options.size)
 		getUserGuess(s, guess, options.size)
 
+		// check for quitting
+		if guess.Num[0] == -1 {
+			gs.time = time.Since(start)
+			gs.guesses = len(guesses)
+			gs.quit = 1
+			allstats = updateStats(gs, allstats)
+			printStats(allstats)
+			fmt.Println("Thanks for playing.")
+			break
+		}
 		// check if numbers match
 		assignColors(guess, password, options.size)
 		guesses = append(guesses, guess)
