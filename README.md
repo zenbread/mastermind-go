@@ -12,8 +12,8 @@
 
 ### Gameplay
 
-- [] Two digit numbers (highest 25)
-- [] 4 or 5 numbers
+- [x] Two digit numbers (highest 25)
+- [x] 4 or 5 numbers
 
 ### Menu
 
