@@ -244,7 +244,6 @@ func main() {
 	if err != nil {
 		log.Fatal("Unable to access file system.")
 	}
-	fmt.Println(dirname)
 	path := filepath.Join(dirname, "mastermind.bin")
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
@@ -260,7 +259,7 @@ func main() {
 	s := bufio.NewScanner(os.Stdin)
 	options := gameplayOptions(s)
 	password := getPassword(options)
-	fmt.Println(password)
+	// fmt.Println(password)
 	gs := gamestat{}
 	start := time.Now()
 	guesses := make([]*Guess, 0)
