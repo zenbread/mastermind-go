@@ -129,24 +129,23 @@ func checkWin(guess *Guess, sz int) bool {
 
 func printHistory(o Options, guesses []*Guess) {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "%%%ds ", o.digits)
+	fmt.Fprintf(&sb, "%%%ds ", o.spaces)
 	for _, guess := range guesses {
 		for i := 0; i < o.size; i++ {
 			switch guess.Color[i] {
 			case Right:
-				fmt.Printf(sb.String(), "✅")
+				fmt.Printf(sb.String(), "!")
 			case White:
-				fmt.Printf(sb.String(), "➖")
+				fmt.Printf(sb.String(), "^")
 			case Wrong:
-				fmt.Printf(sb.String(), "⭕")
+				fmt.Printf(sb.String(), "x")
 			}
 		}
 		fmt.Println("")
-		// add the colors to each numbers
 
 		// get rid of the wrong ones
 		for i := 0; i < o.size; i++ {
-			fmt.Printf(fmt.Sprintf("%%%dd", -o.spaces), guess.Num[i])
+			fmt.Printf(fmt.Sprintf("%%%dd", o.spaces+1), guess.Num[i])
 		}
 		fmt.Println("\n------------")
 	}
